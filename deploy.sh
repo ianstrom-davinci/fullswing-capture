@@ -120,18 +120,22 @@ spec:
         image: postgres:15
         env:
         - name: POSTGRES_DB
-          value: fullswing_db
+          valueFrom:
+            configMapKeyRef:
+              name: django-config
+              key: DATABASE_NAME
         - name: POSTGRES_USER
-          value: fullswing_user
+          valueFrom:
+            configMapKeyRef:
+              name: django-config
+              key: DATABASE_USER
         - name: POSTGRES_PASSWORD
-          value: fullswing123
-        - name: PGUSER
-          value: fullswing_user
-        ports:
-        - containerPort: 5432
-        volumeMounts:
-        - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
+          valueFrom:
+            secretKeyRef:
+              name: django-secret
+              key: DATABASE_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
       volumes:
       - name: postgres-storage
         persistentVolumeClaim:
