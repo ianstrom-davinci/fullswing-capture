@@ -23,10 +23,24 @@ docker build -t fullswing-backend:latest ./backend
 docker build -t fullswing-frontend:latest ./frontend
 log_success "Docker images built successfully."
 
-# Import images directly into K3s
+# Import images directly into K3s using temporary files
 log_info "Importing images into K3s..."
-sudo k3s ctr images import <(docker save fullswing-backend:latest)
-sudo k3s ctr images import <(docker save fullswing-frontend:latest)
+
+# Create temporary files
+BACKEND_TAR="/tmp/fullswing-backend.tar"
+FRONTEND_TAR="/tmp/fullswing-frontend.tar"
+
+# Save images to temporary files
+docker save fullswing-backend:latest -o ${BACKEND_TAR}
+docker save fullswing-frontend:latest -o ${FRONTEND_TAR}
+
+# Import into K3s
+sudo k3s ctr images import ${BACKEND_TAR}
+sudo k3s ctr images import ${FRONTEND_TAR}
+
+# Clean up temporary files
+rm -f ${BACKEND_TAR} ${FRONTEND_TAR}
+
 log_success "Images imported into K3s."
 
 # Apply secrets and manifests
