@@ -91,6 +91,7 @@ spec:
               - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
           initialDelaySeconds: 15
           periodSeconds: 5
+          timeoutSeconds: 5
         livenessProbe:
           exec:
             command:
@@ -99,6 +100,14 @@ spec:
               - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
       volumes:
       - name: postgres-storage
         persistentVolumeClaim:
@@ -131,6 +140,23 @@ spec:
       labels:
         app: django-backend
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command:
+          - /bin/sh
+          - -c
+          - |
+            until pg_isready -h postgres-service -p 5432 -U $POSTGRES_USER; do
+              echo "Waiting for postgres..."
+              sleep 2
+            done
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: django-config
+              key: DATABASE_USER
       containers:
       - name: django
         image: fullswing-backend:latest
@@ -158,16 +184,27 @@ spec:
           mountPath: /app/media
         readinessProbe:
           httpGet:
-            path: /admin/
+            path: /admin/login/
             port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 5
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         livenessProbe:
           httpGet:
-            path: /admin/
+            path: /admin/login/
             port: 8000
           initialDelaySeconds: 60
-          periodSeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
       volumes:
       - name: media-storage
         persistentVolumeClaim:
@@ -210,14 +247,23 @@ spec:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 5
+          timeoutSeconds: 3
         livenessProbe:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 10
+          timeoutSeconds: 3
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
 ---
 apiVersion: v1
 kind: Service
