@@ -1,0 +1,15 @@
+FROM node:18-alpine AS debug
+
+WORKDIR /app
+
+# Copy everything and see what we get
+COPY . .
+
+# List contents to debug
+RUN echo "=== Contents of /app ===" && ls -la
+RUN echo "=== Contents of /app/src ===" && ls -la src/ || echo "src directory not found"
+RUN echo "=== Looking for App files ===" && find . -name "*App*" -type f
+RUN echo "=== All TypeScript files ===" && find . -name "*.tsx" -o -name "*.ts"
+
+# Try to run the build to see exact error
+RUN npm install || echo "npm install failed"

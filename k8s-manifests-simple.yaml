@@ -1,0 +1,232 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fullswing-capture
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: django-config
+  namespace: fullswing-capture
+data:
+  DJANGO_DEBUG: "False"
+  ALLOWED_HOSTS: "fullswing.stromfamily.ca,localhost,127.0.0.1"
+  DATABASE_NAME: "fullswing_db"
+  DATABASE_USER: "fullswing_user"
+  CORS_ALLOWED_ORIGINS: "https://fullswing.stromfamily.ca"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: django-secret
+  namespace: fullswing-capture
+type: Opaque
+data:
+  SECRET_KEY: UTBwTDNaWGxOQzJGUlA2ZFVFLXFFU3V1MkRucVFXLS1fLTk5bXFZZFpMb0VSbjZDZjdpZ1lXS0d5TzJvN1ZIZ3FPZw==
+  DATABASE_PASSWORD: dkduVjRMcFd3Rmc4THhxTUxGVFktWVp0WTZrZTMzYzViZHEtbDJhTGVrdw==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: fullswing-capture
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-pvc
+  namespace: fullswing-capture
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: fullswing-capture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: django-config
+              key: DATABASE_NAME
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: django-config
+              key: DATABASE_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: django-secret
+              key: DATABASE_PASSWORD
+        ports:
+        - containerPort: 5432
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: fullswing-capture
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-backend
+  namespace: fullswing-capture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: django-backend
+  template:
+    metadata:
+      labels:
+        app: django-backend
+    spec:
+      containers:
+      - name: django
+        image: fullswing-backend:latest
+        imagePullPolicy: Never
+        envFrom:
+        - configMapRef:
+            name: django-config
+        env:
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: django-secret
+              key: SECRET_KEY
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: django-secret
+              key: DATABASE_PASSWORD
+        - name: DATABASE_HOST
+          value: "postgres-service"
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: media-storage
+          mountPath: /app/media
+      volumes:
+      - name: media-storage
+        persistentVolumeClaim:
+          claimName: media-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-service
+  namespace: fullswing-capture
+spec:
+  selector:
+    app: django-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-frontend
+  namespace: fullswing-capture
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: react-frontend
+  template:
+    metadata:
+      labels:
+        app: react-frontend
+    spec:
+      containers:
+      - name: nginx
+        image: fullswing-frontend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: react-service
+  namespace: fullswing-capture
+spec:
+  selector:
+    app: react-frontend
+  ports:
+  - port: 80
+    targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fullswing-ingress
+  namespace: fullswing-capture
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-production"
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - fullswing.stromfamily.ca
+    secretName: fullswing-tls
+  rules:
+  - host: fullswing.stromfamily.ca
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: django-service
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: react-service
+            port:
+              number: 80
