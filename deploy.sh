@@ -248,7 +248,6 @@ metadata:
   namespace: fullswing-capture
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-production"
-    traefik.ingress.kubernetes.io/router.middlewares: "fullswing-capture-api-stripprefix@kubernetescrd"
 spec:
   ingressClassName: traefik
   tls:
@@ -273,16 +272,6 @@ spec:
             name: react-service
             port:
               number: 80
----
-apiVersion: traefik.containo.us/v1alpha1
-kind: Middleware
-metadata:
-  name: api-stripprefix
-  namespace: fullswing-capture
-spec:
-  stripPrefix:
-    prefixes:
-      - /api
 EOF
 
 log_success "Kubernetes manifests created"
