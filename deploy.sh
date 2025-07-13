@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-K3S_HOST="root@192.168.218.5"
+K3S_HOST="localadmin@192.168.218.5"
 NAMESPACE="fullswing-capture"
 MANIFEST_FILE="k8s-manifests.yaml"
 
