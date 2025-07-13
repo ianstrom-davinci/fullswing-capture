@@ -43,10 +43,15 @@ rm -f ${BACKEND_TAR} ${FRONTEND_TAR}
 
 log_success "Images imported into K3s."
 
-# Apply secrets and manifests
+# Create namespace first
+log_info "Creating namespace..."
+kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+# Apply secrets (now that namespace exists)
 log_info "Applying secrets..."
 kubectl apply -f k8s-secrets.yaml
 
+# Apply manifests
 log_info "Applying manifests..."
 kubectl apply -f k8s-manifests.yaml
 log_success "Manifests applied."
